@@ -3,6 +3,8 @@
 // Written by Nicolas FRADIN
 // Date: 2013/03/07
 //
+// https://github.com/fradinni/backbone-dsbinding
+//
 ///////////////////////////////////////////////////////////////////////////////
 
 (function(_, Backbone) {
