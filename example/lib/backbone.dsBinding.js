@@ -29,42 +29,120 @@
                   // Iterate on each binding
                   _.each(dsBindings, function(attribute, binding) {
 
+                        // Extract binding parts
                         var   match = binding.match(bindingSplitter),
                               element = match[1],
                               tagName = match[2];
 
+                        // Ensure that tagName is defined. 
+                        //By default it's a DIV
                         tagName = tagName || "div";
 
+                        // Declare DataSource properties
+                        var DataSource;
+                        var ListViewEvents;
+                        var ListItemViewEvents;
+
+                        // Determine typeof binding attribute to set DataSource
+                        // It can be an object or a function
+                        var attributeType = typeof(attribute);
+
+                        // If attribute is a function, execute it and set
+                        // DataSource with result
+                        if(attributeType == "function") {
+                              // The function has a view parameter which represents
+                              // current view.
+                              DataSource = attribute(this);
+                              ListViewEvents = {};
+                              ListItemViewEvents = {};
+                        }
+
+                        // If attribute is an object
+                        else if(attributeType == "object") {
+                              // Extract DataSource and Views parameters
+                              DataSource = attribute["dataSource"](this) || undefined;
+                              ListViewEvents = attribute["listEvents"] || {};
+                              ListItemViewEvents = attribute["itemEvents"] || {};
+                        }
+
+                        // If binding attribute is a function,
+                        else {
+                              throw new Error("Unable to determine type of attribute for dsBinding: " + binding);
+                        }
+                        
+                        console.log("ListItemViewEvents = " + ListItemViewEvents);
+
+                        // Check if DataSource is defined
+                        if(!DataSource) {
+                              throw new Error("Unable to configure DataSource.")
+                        }
+
+                        // Get DOMElement will be binded to DataSource
       			var DOMElement = this.$el.find(element).first();
-                  	var DataSource =  typeof(attribute) == "function" ? attribute(this) : attribute;
+
+                        // Get template will be used for a DataSource Item
                         var templateName = DOMElement.attr("ds-item-template");
 
+                        ///////////////////////////////////////////////////////////////
                         // Create ListViewItem Prototype
                         var ListViewItem = Backbone.View.extend({
                               tagName: tagName,
+                              events: ListItemViewEvents,
                               initialize: function() {
                                     this.template = _.template(this.getTemplate(templateName));
                               },
-                              render: function() {
+                              prepareEvents: function(context) {
+                                    var tmpEvents = this.events;
+                              },
+                              render: function(context) {
+                                    // Prepare events for ItemView
+                                    prepareEvents(context);
+
+                                    // Render ItemView in $el
                                     $(this.el).html(this.template(this.model.toJSON()));
                                     return this;
                               }
                         });
 
+                        ///////////////////////////////////////////////////////////////
                         // Create ListView Prototype
                         var ListView = Backbone.View.extend({
-                              render: function() {
+                              events: ListViewEvents,
+                              initialize: function() {
+                                    // Init items array
+                                    this.itemViews = [];
+                              },
+                              prepareEvents: function(context) {
+                                    var tmpEvents = this.events;
+                              },
+                              render: function(context) {
+                                    // Init items array
+                                    this.itemViews = [];
+
+                                    // Clear list HTML
                                     $(this.el).empty();
+
+                                    // Iterate on each model
                                     _.each(this.model.models, function (dsItem) {
-                                          $(this.el).append(new ListViewItem({model: dsItem}).render().el);
+                                          // Build ItemView for current model
+                                          var itemView = new ListViewItem({model: dsItem});
+                                          this.itemViews.push(itemView);
+
+                                          // Prepare events for ItemView
+                                          itemView.prepareEvents(context);
+                                          
+                                          // Render ItemView and append to ListView
+                                          $(this.el).append(itemView.render().el);
                                     }, this);
+
                                     return this;
                               }
                         });
 
+                        ///////////////////////////////////////////////////////////////
                         // Build ListView
                         self._dsBindings[element] = new ListView({el: DOMElement, model: DataSource});
-                        (function(listView) {
+                        (function(parentView, listView) {
 
                               // Bind DataSource modifications
                               DataSource.bind("add remove update reset destroy", function() {
@@ -78,10 +156,11 @@
                                         listView.$el.trigger('create');
                                     }
                               });
-                        })(this._dsBindings[element]);
+
+                        })(this, this._dsBindings[element]);
 
                         // Render ListView
-                        self._dsBindings[element].render();
+                        self._dsBindings[element].render(this);
 
                   }, this);
 		}

@@ -5,7 +5,12 @@ window.ExampleView = Backbone.View.extend({
 	},
 
 	dsBindings: {
-		"#groupList1 li": function(view){ return groupCollection; },
+		"#groupList1 li": {
+			dataSource: function(view){ return groupCollection; },
+			itemEvents: {
+				"click a": function() { alert('ok'); return false; }
+			}
+		},
 		"#groupList2": function(view){ return groupCollection; }
 	},
 
@@ -16,6 +21,10 @@ window.ExampleView = Backbone.View.extend({
 
 	initialize: function() {
 		this.template = _.template(this.getTemplate("example"));
+	},
+
+	test2: function() {
+		alert('test2');
 	},
 
 	render: function() {
