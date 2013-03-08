@@ -10,8 +10,14 @@
       var bindingSplitter = /^(\S+)\s*(.*)$/;
       var functionSplitter = /^(\w+)[\(]([\w_,\s]+)[\)]$/;
 
+      //
+      // Extend Backbone View Prototype
+      //
 	_.extend(Backbone.View.prototype, {
 
+            //
+            // Method used to bind DataSources to view
+            //
 		bindDataSources: function(dsBindings) {
 			console.log("Bind datasources...");
 			var self = this;
@@ -83,74 +89,15 @@
                         var templateName = DOMElement.attr("ds-item-template");
 
 
-                        ///////////////////////////////////////////////////////////////
-                        // 
-                        //
-                        var prepareEventsForView = function(view, events, context) {
-
-                              // Get events keys
-                              var eventBindings = _.keys(events);
-                              var viewEvents = {};
-
-                              // Iterate on each event binding
-                              _.each(eventBindings, function(eventBinding) {
-
-                                    // Check typeof event
-                                    var eventType = typeof(events[eventBinding]);
-                                    console.log("Event type = " + eventType);
-
-                                    // If event is a function
-                                    if(eventType == "function") {
-                                          viewEvents[eventBinding] = events[eventBinding](context);
-                                    }
-
-                                    // If event is a String
-                                    else if(eventType == "string") {
-
-                                          // Use regex to extract function name and params
-                                          var fctMatch = events[eventBinding].match(functionSplitter),
-                                                fctName = fctMatch[1],
-                                                fctParams = fctMatch[2];
-
-                                          // Split params names
-                                          var paramsArray = fctParams.split(',');
-
-                                          // Build trim function
-                                          var trim = function(text) {
-                                                return text.replace(/^\s+/g,'').replace(/\s+$/g,'')
-                                          }
-
-                                          // Build params object.
-                                          var params = {};
-                                          _.each(paramsArray, function(param){
-                                                var paramName = trim(param);
-                                                params[paramName] = view.model.get(paramName);
-                                          });
-
-                                          // Create view event
-                                          viewEvents[eventBinding] = (function(view, context, events){ 
-                                                return function(){ context[fctName](view, params); }; 
-                                          })(view, context, events);
-                                    }
-
-                                    // If event has another type -> Error
-                                    else {
-                                          throw new Error("Unable to process event with type: " + eventType);
-                                    }
-
-                              }, this);
-
-                              return viewEvents;
-
-                        }
-
-
+                        
                         ///////////////////////////////////////////////////////////////
                         // Create ListViewItem Prototype
                         var ListViewItem = Backbone.View.extend({
                               tagName: tagName,
                               initialize: function() {
                                     this.template = _.template(this.getTemplate(templateName));
+                                    /*this.model.bind("change", this.render, this);
+                                    this.model.bind("destroy", this.close, this);*/
                               },
                               render: function(context) {
                                     // Render ItemView in $el
@@ -175,9 +122,9 @@
                                     _.each(this.model.models, function (dsItem) {
                                           // Build ItemView for current model
                                           var itemView = new ListViewItem({model: dsItem, events: {}});
-                                         
+                                          this.itemViews.push(itemView);
                                           // Generate Events for current ItemView
-                                          itemView.delegateEvents(prepareEventsForView(itemView, ListItemViewEvents, self));
+                                          itemView.delegateEvents(Backbone.DsBinding.prepareEventsForView(itemView, ListItemViewEvents, self));
                                           
                                           // Render ItemView and append to ListView
                                           $(this.el).append(itemView.render().el);
@@ -191,6 +138,8 @@
                         ///////////////////////////////////////////////////////////////
                         // Build ListView
                         self._dsBindings[element] = new ListView({el: DOMElement, model: DataSource});
+
+                        // Use IIF to bind DataSource events to View
                         (function(listView) {
 
                               // Bind DataSource modifications to View
@@ -201,20 +150,114 @@
                                     if(datarole == "listview") {
                                           listView.$el.listview();
                                           listView.$el.listview('refresh');
-                                    } else {
-                                        listView.$el.trigger('create');
-                                    }
+                                    } 
+                                    listView.$el.trigger('create');
                               });
 
                         })(this._dsBindings[element]);
 
 
                         // Render ListView
-                        self._dsBindings[element].render(this);
+                        this._dsBindings[element].render(this);
 
+                        // Use IIF to bind DataSource events to View
+                        
+                        (function(listView) {
+                              if(listView.itemViews.length > 0) {
+                                    _.each(listView.itemViews, function(itemView){
+                                          itemView.model.bind('change', function(){ 
+                                                itemView.render();
+                                                /*
+                                                itemView.$el.attr("class", "");
+                                                var attrs = $(itemView.el).get(0).attributes;
+                                                $.each(attrs, function(i, item) {
+                                                      if(item !== undefined)
+                                                            itemView.$el.removeAttr(item.name);
+                                                });
+*/
+                                                //console.log("attrs = " + attrs);
+                                                //listView.render();
+                                                //listView.$el.listview();
+                                                //listView.$el.listview('refresh');
+                                                //itemView.$el.trigger('create');
+                                                
+                                                //listView.$el.listview('refresh');
+                                          }, itemView);
+                                    });
+                              }
+                        })(this._dsBindings[element]);
+                        
                   }, this);
 		}
 
 	});
+
+
+      //
+      // DsBinding Object
+      // Contains utility methods and objects
+      //
+      Backbone.DsBinding = {};
+
+
+      //
+      // Method used to prepare events for View
+      //
+      Backbone.DsBinding.prepareEventsForView = function(view, events, context) {
+
+            // Get events keys
+            var eventBindings = _.keys(events);
+            var viewEvents = {};
+
+            // Iterate on each event binding
+            _.each(eventBindings, function(eventBinding) {
+
+                  // Check typeof event
+                  var eventType = typeof(events[eventBinding]);
+
+                  // If event is a function
+                  if(eventType == "function") {
+                        viewEvents[eventBinding] = events[eventBinding](context);
+                  }
+
+                  // If event is a String
+                  else if(eventType == "string") {
+
+                        // Use regex to extract function name and params
+                        var   fctMatch = events[eventBinding].match(functionSplitter),
+                              fctName = fctMatch ? fctMatch[1] : events[eventBinding],
+                              fctParams = fctMatch ? fctMatch[2] : "";
+
+                        // Split params names
+                        var paramsArray = fctParams.split(',');
+
+                        // Build trim function
+                        var trim = function(text) {
+                              return text.replace(/^\s+/g,'').replace(/\s+$/g,'')
+                        }
+
+                        // Build params object.
+                        var params = {};
+                        _.each(paramsArray, function(param){
+                              var paramName = trim(param);
+                              params[paramName] = view.model.get(paramName);
+                        });
+
+                        // Create view event
+                        viewEvents[eventBinding] = (function(view, context, events){ 
+                              return function(event){ context[fctName](event, view, params); }; 
+                        })(view, context, events);
+                  }
+
+                  // If event has another type -> Error
+                  else {
+                        throw new Error("Unable to process event with type: " + eventType);
+                  }
+
+            }, this);
+
+            return viewEvents;
+      };
+
 
 })(window._, window.Backbone);

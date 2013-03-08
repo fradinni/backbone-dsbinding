@@ -8,7 +8,7 @@ window.ExampleView = Backbone.View.extend({
 		"#groupList1 li": {
 			dataSource: function(view){ return groupCollection; },
 			itemEvents: {
-				"click a": "test2(_id)"
+				//"click .delete": "test2"
 			}
 		},
 		"#groupList2": function(view){ return groupCollection; }
@@ -16,15 +16,11 @@ window.ExampleView = Backbone.View.extend({
 
 	events: {
 		"click #btn": "addElement",
-		"click a[id^='delete_']": "deleteElement"
+		"click .delete": "deleteElement"
 	},
 
 	initialize: function() {
 		this.template = _.template(this.getTemplate("example"));
-	},
-
-	test2: function(view) {
-		alert("ok");
 	},
 
 	render: function() {
@@ -39,23 +35,30 @@ window.ExampleView = Backbone.View.extend({
 
 	addElement: function(event) {
 		event.preventDefault();
+
+		// Get element name
 		var elementName = $("#elementName").val();
+
+		// Build new element
 		var nbElements = groupCollection.models.length;
 		var newElement = new GroupModel({_id: nbElements+1, name: elementName});
+
+		// Save element
 		groupCollection.add(newElement);
 		newElement.save({}, {
 			success: function() {
 				console.log("New element saved !");
 			}
 		});
+
+		// Clear input field
 		$("#elementName").val("");
 	},
 
 	deleteElement: function(event) {
 		event.preventDefault();
-		var tagId = $(event.srcElement).attr('id') || $(event.srcElement.parentNode).attr('id');
-		var elementId = tagId.substring(tagId.indexOf('_')+1);
-		var element = groupCollection.find(function(obj) { return obj.get('_id') == elementId});
+		var id = $(event.currentTarget).data("id")
+		var element = groupCollection.find(function(obj) { return obj.get('_id') == id });
 		element.destroy();
 	}
 });
