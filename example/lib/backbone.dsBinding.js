@@ -96,8 +96,6 @@
                               tagName: tagName,
                               initialize: function() {
                                     this.template = _.template(this.getTemplate(templateName));
-                                    /*this.model.bind("change", this.render, this);
-                                    this.model.bind("destroy", this.close, this);*/
                               },
                               render: function(context) {
                                     // Render ItemView in $el
@@ -160,28 +158,16 @@
                         // Render ListView
                         this._dsBindings[element].render(this);
 
-                        // Use IIF to bind DataSource events to View
-                        
+                        // Use IIF to bind Model events to View
                         (function(listView) {
                               if(listView.itemViews.length > 0) {
                                     _.each(listView.itemViews, function(itemView){
                                           itemView.model.bind('change', function(){ 
-                                                itemView.render();
-                                                /*
-                                                itemView.$el.attr("class", "");
-                                                var attrs = $(itemView.el).get(0).attributes;
-                                                $.each(attrs, function(i, item) {
-                                                      if(item !== undefined)
-                                                            itemView.$el.removeAttr(item.name);
-                                                });
-*/
-                                                //console.log("attrs = " + attrs);
-                                                //listView.render();
-                                                //listView.$el.listview();
-                                                //listView.$el.listview('refresh');
-                                                //itemView.$el.trigger('create');
-                                                
-                                                //listView.$el.listview('refresh');
+                                                listView.render();
+                                                if(listView.$el.data("role") == "listview")
+                                                      listView.$el.listview('refresh');
+                                                else
+                                                      listView.$el.trigger('create');
                                           }, itemView);
                                     });
                               }
