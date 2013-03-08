@@ -8,7 +8,7 @@ window.ExampleView = Backbone.View.extend({
 		"#groupList1 li": {
 			dataSource: function(view){ return groupCollection; },
 			itemEvents: {
-				"click a": function() { alert('ok'); return false; }
+				"click a": "test2(_id)"
 			}
 		},
 		"#groupList2": function(view){ return groupCollection; }
@@ -23,8 +23,8 @@ window.ExampleView = Backbone.View.extend({
 		this.template = _.template(this.getTemplate("example"));
 	},
 
-	test2: function() {
-		alert('test2');
+	test2: function(view) {
+		alert("ok");
 	},
 
 	render: function() {

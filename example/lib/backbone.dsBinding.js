@@ -8,6 +8,7 @@
 (function(_, Backbone) {
 
       var bindingSplitter = /^(\S+)\s*(.*)$/;
+      var functionSplitter = /^(\w+)[\(]([\w_,\s]+)[\)]$/;
 
 	_.extend(Backbone.View.prototype, {
 
@@ -69,8 +70,6 @@
                         else {
                               throw new Error("Unable to determine type of attribute for dsBinding: " + binding);
                         }
-                        
-                        console.log("ListItemViewEvents = " + ListItemViewEvents);
 
                         // Check if DataSource is defined
                         if(!DataSource) {
@@ -83,21 +82,77 @@
                         // Get template will be used for a DataSource Item
                         var templateName = DOMElement.attr("ds-item-template");
 
+
+                        ///////////////////////////////////////////////////////////////
+                        // 
+                        //
+                        var prepareEventsForView = function(view, events, context) {
+
+                              // Get events keys
+                              var eventBindings = _.keys(events);
+                              var viewEvents = {};
+
+                              // Iterate on each event binding
+                              _.each(eventBindings, function(eventBinding) {
+
+                                    // Check typeof event
+                                    var eventType = typeof(events[eventBinding]);
+                                    console.log("Event type = " + eventType);
+
+                                    // If event is a function
+                                    if(eventType == "function") {
+                                          viewEvents[eventBinding] = events[eventBinding](context);
+                                    }
+
+                                    // If event is a String
+                                    else if(eventType == "string") {
+
+                                          // Use regex to extract function name and params
+                                          var fctMatch = events[eventBinding].match(functionSplitter),
+                                                fctName = fctMatch[1],
+                                                fctParams = fctMatch[2];
+
+                                          // Split params names
+                                          var paramsArray = fctParams.split(',');
+
+                                          // Build trim function
+                                          var trim = function(text) {
+                                                return text.replace(/^\s+/g,'').replace(/\s+$/g,'')
+                                          }
+
+                                          // Build params object.
+                                          var params = {};
+                                          _.each(paramsArray, function(param){
+                                                var paramName = trim(param);
+                                                params[paramName] = view.model.get(paramName);
+                                          });
+
+                                          // Create view event
+                                          viewEvents[eventBinding] = (function(view, context, events){ 
+                                                return function(){ context[fctName](view, params); }; 
+                                          })(view, context, events);
+                                    }
+
+                                    // If event has another type -> Error
+                                    else {
+                                          throw new Error("Unable to process event with type: " + eventType);
+                                    }
+
+                              }, this);
+
+                              return viewEvents;
+
+                        }
+
+
                         ///////////////////////////////////////////////////////////////
                         // Create ListViewItem Prototype
                         var ListViewItem = Backbone.View.extend({
                               tagName: tagName,
-                              events: ListItemViewEvents,
                               initialize: function() {
                                     this.template = _.template(this.getTemplate(templateName));
                               },
-                              prepareEvents: function(context) {
-                                    var tmpEvents = this.events;
-                              },
                               render: function(context) {
-                                    // Prepare events for ItemView
-                                    prepareEvents(context);
-
                                     // Render ItemView in $el
                                     $(this.el).html(this.template(this.model.toJSON()));
                                     return this;
@@ -107,17 +162,11 @@
                         ///////////////////////////////////////////////////////////////
                         // Create ListView Prototype
                         var ListView = Backbone.View.extend({
-                              events: ListViewEvents,
                               initialize: function() {
                                     // Init items array
                                     this.itemViews = [];
                               },
-                              prepareEvents: function(context) {
-                                    var tmpEvents = this.events;
-                              },
                               render: function(context) {
-                                    // Init items array
-                                    this.itemViews = [];
 
                                     // Clear list HTML
                                     $(this.el).empty();
@@ -125,11 +174,10 @@
                                     // Iterate on each model
                                     _.each(this.model.models, function (dsItem) {
                                           // Build ItemView for current model
-                                          var itemView = new ListViewItem({model: dsItem});
-                                          this.itemViews.push(itemView);
-
-                                          // Prepare events for ItemView
-                                          itemView.prepareEvents(context);
+                                          var itemView = new ListViewItem({model: dsItem, events: {}});
+                                         
+                                          // Generate Events for current ItemView
+                                          itemView.delegateEvents(prepareEventsForView(itemView, ListItemViewEvents, self));
                                           
                                           // Render ItemView and append to ListView
                                           $(this.el).append(itemView.render().el);
@@ -139,12 +187,13 @@
                               }
                         });
 
+
                         ///////////////////////////////////////////////////////////////
                         // Build ListView
                         self._dsBindings[element] = new ListView({el: DOMElement, model: DataSource});
-                        (function(parentView, listView) {
+                        (function(listView) {
 
-                              // Bind DataSource modifications
+                              // Bind DataSource modifications to View
                               DataSource.bind("add remove update reset destroy", function() {
                                     listView.render();
 
@@ -157,7 +206,8 @@
                                     }
                               });
 
-                        })(this, this._dsBindings[element]);
+                        })(this._dsBindings[element]);
+
 
                         // Render ListView
                         self._dsBindings[element].render(this);
